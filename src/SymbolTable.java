@@ -1,5 +1,8 @@
 import java.util.ArrayList;
 
+import exception.SymbolDuplicationException;
+import exception.SymbolNotFoundException;
+
 /**
  * symbol과 관련된 데이터와 연산을 소유한다.
  * section 별로 하나씩 인스턴스를 할당한다.
@@ -10,6 +13,14 @@ public class SymbolTable {
 	// 기타 literal, external 선언 및 처리방법을 구현한다.
 	
 	/**
+	 * 생성자 선언
+	 */
+	public SymbolTable() {
+		this.symbolList = new ArrayList<>();
+		this.locationList = new ArrayList<>();
+	}
+	
+	/**
 	 * 새로운 Symbol을 table에 추가한다.
 	 * @param symbol : 새로 추가되는 symbol의 label
 	 * @param location : 해당 symbol이 가지는 주소값
@@ -17,7 +28,16 @@ public class SymbolTable {
 	 * 매칭되는 주소값의 변경은 modifySymbol()을 통해서 이루어져야 한다.
 	 */
 	public void putSymbol(String symbol, int location) {
+		int symbolIndex = this.search(symbol); // 심볼 검색
 		
+		// 심볼이 존재 할 경우
+		if(symbolIndex > -1) {
+			throw new SymbolDuplicationException(); // 심볼 중복 exception 발생
+		}
+		
+		// 심볼테이블 추가
+		this.symbolList.add(symbol);
+		this.locationList.add(location);
 	}
 	
 	/**
@@ -26,7 +46,15 @@ public class SymbolTable {
 	 * @param newLocation : 새로 바꾸고자 하는 주소값
 	 */
 	public void modifySymbol(String symbol, int newLocation) {
+		int symbolIndex = this.search(symbol); // 심볼 검색
 		
+		// 심볼이 존재하지 않을 경우
+		if(symbolIndex == -1) {
+			throw new SymbolNotFoundException(); // 심볼 없음 exception 발생
+		}
+
+		// 심볼테이블 업데이트
+		this.locationList.set(symbolIndex, newLocation);
 	}
 	
 	/**
@@ -36,10 +64,15 @@ public class SymbolTable {
 	 */
 	public int search(String symbol) {
 		int address = 0;
-		//...
-		return address;
+		
+		for(String sym : symbolList) { // 심볼을 반복하여
+			if(sym.equals(symbol)) {
+				return address; // 해당 심볼이 찾는 심볼일 경우 리턴
+			}
+			
+			address++;
+		}
+		
+		return -1;
 	}
-	
-	
-	
 }

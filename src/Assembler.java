@@ -1,6 +1,16 @@
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+
+import exception.InitException;
 
 
 /**
@@ -23,6 +33,12 @@ import java.util.Map;
  *  + 제공하는 프로그램 구조의 개선방법을 제안하고 싶은 분들은 보고서의 결론 뒷부분에 첨부 바랍니다. 내용에 따라 가산점이 있을 수 있습니다.
  */
 public class Assembler {
+	
+	// 해당 클래스에서 사용하는 전역 변수 초기화
+	private static final String INPUT_FILE_PREFIX = "src/";
+	private static final String OUTPUT_FILE_PREFIX = "src/output/";
+	
+	public static int numberOfSection = 0;
 	
 	/** instruction 명세를 저장한 공간 */
 	InstTable instTable;
@@ -58,14 +74,14 @@ public class Assembler {
 	 * 어셈블러의 메인 루틴
 	 */
 	public static void main(String[] args) {
-		Assembler assembler = new Assembler("inst.data");
-		assembler.loadInputFile("input.txt");	
+		Assembler assembler = new Assembler(INPUT_FILE_PREFIX + "inst.data");
+		assembler.loadInputFile(INPUT_FILE_PREFIX + "input.txt");	
 		assembler.pass1();
 
-		assembler.printSymbolTable("symtab_00000000");
-		assembler.printLiteralTable("literaltab_00000000");
+		assembler.printSymbolTable(OUTPUT_FILE_PREFIX + "symtab_20180427");
+		assembler.printLiteralTable(OUTPUT_FILE_PREFIX + "literaltab_20180427");
 		assembler.pass2();
-		assembler.printObjectCode("output_00000000");
+		assembler.printObjectCode(OUTPUT_FILE_PREFIX + "output_20180427");
 		
 	}
 
@@ -74,8 +90,29 @@ public class Assembler {
 	 * @param inputFile : input 파일 이름.
 	 */
 	private void loadInputFile(String inputFile) {
-		// TODO Auto-generated method stub
-		
+		try {
+			File file = new File(inputFile);
+			
+			FileReader fileReader = new FileReader(file); // 파일 스트림 생성
+			BufferedReader bufferedReader = new BufferedReader(fileReader); // 버퍼 생성
+			
+			String line = ""; // 라인 변수 생성
+			
+			while((line = bufferedReader.readLine()) != null) {
+				if(line.trim().length() != 0 
+						&& !line.trim().startsWith(".")) { // 양 옆 공백을 제거한 상태의 길이가 0일경우와 주석의 경우 추가하지 않음
+					lineList.add(line);
+				}
+			}
+			
+			System.out.println("init line complete!");
+			
+			bufferedReader.close();
+		} catch(FileNotFoundException e) {
+			throw new InitException(inputFile + " not found.");
+		} catch (IOException e) {
+			throw new InitException("An error occurred while reading the " + inputFile + ".");
+		}
 	}
 
 	/** 
@@ -86,8 +123,45 @@ public class Assembler {
 	 *    주의사항 : SymbolTable과 TokenTable은 프로그램의 section별로 하나씩 선언되어야 한다.
 	 */
 	private void pass1() {
-		// TODO Auto-generated method stub
+		// 패스 1 과정에서 사용하는 변수 초기화
+		TokenTable tokenTable = null;
+		LiteralTable literalTable = null;
+		SymbolTable symbolTable = null;
+		Token newSectionFirstToken = null;
 		
+		// 토큰 설정
+		for(String line : lineList) {
+			
+			// 섹션 변경 데이터 초기화 begin --
+			if(TokenList.size() < (Assembler.numberOfSection + 1)) { 
+				if(tokenTable != null) { // 토큰 테이블이 존재 할 경우
+					newSectionFirstToken = tokenTable.getToken(tokenTable.tokenList.size() - 1); // 마지막 토큰 조회 (CSECT)
+					tokenTable.removeLastToken(); // 마지막 토큰 삭제
+					
+					tokenTable.setLocation(); // 토큰에 주소정보 할당
+				}
+				
+				symbolTable = new SymbolTable(); // 신규 섹션의 심볼 테이블 생성
+				literalTable = new LiteralTable(); // 신규 섹션의 리터럴 테이블 생성
+				tokenTable = new TokenTable(symbolTable, instTable, literalTable); // 토큰 테이블 생성
+				
+				if(newSectionFirstToken != null) {
+					tokenTable.setToken(newSectionFirstToken); // 신규 섹션의 첫번째를 설정
+					
+					newSectionFirstToken = null; // 다시 신규섹션이 들어올 때 처리될 수 있도록 초기화
+				}
+				
+				TokenList.add(tokenTable); // 토큰 리스트에 토큰 테이블 추가
+			}
+			// 섹션 변경 데이터 초기화 end --
+			
+			tokenTable.putToken(line); // 토큰 삽입
+		}
+		
+		// 마지막 토큰 테이블 로케이션 할당
+		tokenTable.setLocation();
+		
+		System.err.println("pass 1 complete!");
 	}
 	
 	/**
@@ -95,8 +169,32 @@ public class Assembler {
 	 * @param fileName : 저장되는 파일 이름
 	 */
 	private void printSymbolTable(String fileName) {
-		// TODO Auto-generated method stub
+		try {
+			BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fileName));
+			StringBuffer stringBuffer = new StringBuffer();
+			
+			for(int i = 0; i < TokenList.size(); i++) { // 섹션 수 만큼 반복
+				TokenTable tokenTable = TokenList.get(i); 
+				
+				for(int z = 0; z < tokenTable.symTab.symbolList.size(); z++) { // 각 섹션 별 심볼 수 만큼 반복
+					stringBuffer.append(tokenTable.symTab.symbolList.get(z)) // 버퍼에 입력
+							    .append("\t")
+							    .append(String.format("%02X", tokenTable.symTab.locationList.get(z)))
+								.append("\n");
+				}
+				
+				stringBuffer.append("\n");
+			}
+			
+			bufferedOutputStream.write(stringBuffer.toString().getBytes()); // 출력 
+			bufferedOutputStream.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		
+		System.out.println("print symbol table complete!");
 	}
 
 	/**
@@ -104,8 +202,31 @@ public class Assembler {
 	 * @param fileName : 저장되는 파일 이름
 	 */
 	private void printLiteralTable(String fileName) {
-		// TODO Auto-generated method stub
+		try {
+			BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fileName));
+			StringBuffer stringBuffer = new StringBuffer();
+			
+			for(int i = 0; i < TokenList.size(); i++) { // 섹션 수 만큼 반복
+				TokenTable tokenTable = TokenList.get(i); 
+				
+				for(int z = 0; z < tokenTable.literalTab.literalList.size(); z++) { // 각 섹션 별 리터럴 수 만큼 반복
+					stringBuffer.append(tokenTable.literalTab.literalList.get(z)) // 버퍼에 입력
+							    .append("\t")
+							    .append(String.format("%02X", tokenTable.literalTab.locationList.get(z)))
+								.append("\n");
+				}
+			}
+			
+			bufferedOutputStream.write(stringBuffer.toString().getBytes()); // 출력 
+			bufferedOutputStream.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		
+		
+		System.out.println("print literal table complete!");
 	}
 
 	/**
