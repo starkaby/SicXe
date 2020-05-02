@@ -2,7 +2,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import exception.SymbolNotFoundException;
-import exception.TokenParsingException;
+import exception.SyntexException;
 import util.StringUtil;
 
 /**
@@ -26,6 +26,9 @@ public class TokenTable {
 	SymbolTable symTab;
 	LiteralTable literalTab;
 	InstTable instTab;
+	ExtTable extTab;
+	Section section;
+	ModifyTable modifyTab;
 	
 	/** 각 line을 의미별로 분할하고 분석하는 공간. */
 	ArrayList<Token> tokenList;
@@ -35,12 +38,16 @@ public class TokenTable {
 	 * @param symTab : 해당 section과 연결되어있는 symbol table
 	 * @param instTab : instruction 명세가 정의된 instTable
 	 */
-	public TokenTable(SymbolTable symTab, InstTable instTab, LiteralTable literalTab) {
+	public TokenTable(SymbolTable symTab, InstTable instTab, LiteralTable literalTab, 
+			ExtTable extTab, Section section, ModifyTable modifyTab) {
 		tokenList = new ArrayList<>(); // 토큰 리스트 생성
 		
 		this.symTab = symTab; // 섹션의 심볼테이블 연결
 		this.instTab = instTab; // 기계어 테이블 연결
 		this.literalTab = literalTab; // 리터럴 테이블 연결
+		this.extTab = extTab; // 외부테이블 연결
+		this.section = section; // 섹션 연결
+		this.modifyTab = modifyTab; // 수정 테이블 연결
 	}
 	
 	/**
@@ -80,7 +87,6 @@ public class TokenTable {
 	/**
 	 * 해당 토큰 테이블의 토큰을 순서대로 반복하며 주소값을 할당한다.
 	 * 또한, 해당 함수에서 nixbpe도 설정하며, 일부 어셈블러 지시자도 같이 분석한다.
-	 * 
 	 */
 	public void setLocation() {
 		int location = 0;
@@ -97,19 +103,23 @@ public class TokenTable {
 			// 주소값 할당 end --
 			
 			// 어셈블리 지시어 처리 begin --
-			if(StringUtil.nvl(instruction.operator).equals("RESW")) { // 해당 지시어 접촉 시 매개변수 만큼 메모리 공간 확보 (3byte)
+			if(StringUtil.nvl(instruction.operator).equals("EXTDEF")) { // 외부 정의 접촉 시 외부 참조 테이블에 추가 (Pass1에서는 데이터만 추가하고 pass2에서 검증한다)
+				this.extTab.addExtdef(token.operand[0]);
+			} else if(StringUtil.nvl(instruction.operator).equals("EXTREF")) { // 외부 참조 접촉 시 외부 참조 테이블에 추가 (Pass1에서는 데이터만 추가하고 pass2에서 검증한다)
+				this.extTab.addExtref(token.operand[0]);
+			} else if(StringUtil.nvl(instruction.operator).equals("RESW")) { // 해당 지시어 접촉 시 매개변수 만큼 메모리 공간 확보 (3byte)
 				if(StringUtil.isNumber(token.operand[0])) {
 					location = location + (Integer.parseInt(token.operand[0]) * 3);
 				} else {
-					throw new TokenParsingException("A number must be entered for this parameter.");
+					throw new SyntexException("A number must be entered for this parameter.");
 				}
 			} else if(StringUtil.nvl(instruction.operator).equals("RESB")) { // 해당 지시어 접촉 시 매개변수 만큼 메모리 공간 확보 (1byte)
 				if(StringUtil.isNumber(token.operand[0])) {
 					location = location + Integer.parseInt(token.operand[0]);
 				} else {
-					throw new TokenParsingException("A number must be entered for this parameter.");
+					throw new SyntexException("A number must be entered for this parameter.");
 				}
-			} else if(StringUtil.nvl(instruction.operator).equals("EQU")) { // 해당 지시어 접촉 시 매개변수 만큼 메모리 공간 확보 (1byte)
+			} else if(StringUtil.nvl(instruction.operator).equals("EQU")) { // 해당 지시어 접촉 시 메모리의 공간을 변경한다.
 				if(token.operand[0].equals("*")) { // 현재 메모리 주소를 주소값으로 설정
 					token.location = location;
 				} else if(StringUtil.isArithmetic(token.operand[0])) { // 수식의 경우
@@ -257,7 +267,7 @@ class Token{
 		if(!StringUtil.isEmpty(parsingData[1])) {
 			this.operator = parsingData[1];
 		} else {
-			throw new TokenParsingException("Operator is required."); // 명령어가 없으면 오류
+			throw new SyntexException("Operator is required."); // 명령어가 없으면 오류
 		}
 		
 		// operand 설정
@@ -284,12 +294,12 @@ class Token{
 	 */
 	public void validation(Instruction instruction) {
 		if(instruction == null) {
-			throw new TokenParsingException("This instruction does not exist."); // 명령어가 존재하지 않을 때
+			throw new SyntexException("This instruction does not exist."); // 명령어가 존재하지 않을 때
 		}
 		
 		if(this.operand != null 
 				&& this.operand.length < instruction.minOperandCount) { // 매개변수 숫자 미달 시
-			throw new TokenParsingException("The minimum number of parameters is "+instruction.minOperandCount+".");
+			throw new SyntexException("The minimum number of parameters is "+instruction.minOperandCount+".");
 		}
 		
 		if(instruction.isNewSection()) { // 새로운 섹션이 필요한 경우
@@ -307,7 +317,15 @@ class Token{
 	 * @param value : 집어넣고자 하는 값. 1또는 0으로 선언한다.
 	 */
 	public void setFlag(int flag, int value) {
-		//...
+		if(this.getFlag(flag) == flag) { // 플래그가 설정 되어 있을 경우
+			if(value == 0) {
+				this.nixbpe -= flag;
+			}
+		} else { // 플래그가 설정 되어 있지 않을 경우
+			if(value == 1) {
+				this.nixbpe += flag;
+			}
+		}
 	}
 	
 	/**

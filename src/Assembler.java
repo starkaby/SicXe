@@ -5,10 +5,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 
 import exception.InitException;
 
@@ -50,6 +47,13 @@ public class Assembler {
 	ArrayList<LiteralTable> literaltabList;
 	/** 프로그램의 section별로 프로그램을 저장하는 공간*/
 	ArrayList<TokenTable> TokenList;
+	/** 프로그램의 section별로 정의와 참조를 저장하는 공간*/
+	ArrayList<ExtTable> extList;
+	/** 프로그램의 section 정보를 저장하는 공간*/
+	ArrayList<Section> sectionList;
+	/** 프로그램의 section 정보를 저장하는 공간*/
+	ArrayList<ModifyTable> modifyList;
+	
 	/** 
 	 * Token, 또는 지시어에 따라 만들어진 오브젝트 코드들을 출력 형태로 저장하는 공간.   
 	 * 필요한 경우 String 대신 별도의 클래스를 선언하여 ArrayList를 교체해도 무방함.
@@ -68,6 +72,11 @@ public class Assembler {
 		literaltabList = new ArrayList<LiteralTable>();
 		TokenList = new ArrayList<TokenTable>();
 		codeList = new ArrayList<String>();
+		
+		// 신규 추가 테이블
+		extList = new ArrayList<>();
+		sectionList = new ArrayList<>();
+		modifyList = new ArrayList<>();
 	}
 
 	/** 
@@ -82,7 +91,6 @@ public class Assembler {
 		assembler.printLiteralTable(OUTPUT_FILE_PREFIX + "literaltab_20180427");
 		assembler.pass2();
 		assembler.printObjectCode(OUTPUT_FILE_PREFIX + "output_20180427");
-		
 	}
 
 	/**
@@ -127,6 +135,9 @@ public class Assembler {
 		TokenTable tokenTable = null;
 		LiteralTable literalTable = null;
 		SymbolTable symbolTable = null;
+		ExtTable extTable = null;
+		Section section = null;
+		ModifyTable modify = null;
 		Token newSectionFirstToken = null;
 		
 		// 토큰 설정
@@ -143,7 +154,18 @@ public class Assembler {
 				
 				symbolTable = new SymbolTable(); // 신규 섹션의 심볼 테이블 생성
 				literalTable = new LiteralTable(); // 신규 섹션의 리터럴 테이블 생성
-				tokenTable = new TokenTable(symbolTable, instTable, literalTable); // 토큰 테이블 생성
+				extTable = new ExtTable();  // 신규 섹션의 외부참조/정의 테이블 생성
+				section = new Section(); // 섹션 정보를 관리하는 섹션 객체 생성
+				modify = new ModifyTable();
+				
+				// 리스트에 할당
+				symtabList.add(symbolTable);
+				literaltabList.add(literalTable);
+				extList.add(extTable);
+				sectionList.add(section);
+				modifyList.add(modify);
+				
+				tokenTable = new TokenTable(symbolTable, instTable, literalTable, extTable, section, modify); // 토큰 테이블 생성
 				
 				if(newSectionFirstToken != null) {
 					tokenTable.setToken(newSectionFirstToken); // 신규 섹션의 첫번째를 설정
@@ -171,22 +193,22 @@ public class Assembler {
 	private void printSymbolTable(String fileName) {
 		try {
 			BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fileName));
-			StringBuffer stringBuffer = new StringBuffer();
+			StringBuilder stringBuilder = new StringBuilder();
 			
 			for(int i = 0; i < TokenList.size(); i++) { // 섹션 수 만큼 반복
 				TokenTable tokenTable = TokenList.get(i); 
 				
 				for(int z = 0; z < tokenTable.symTab.symbolList.size(); z++) { // 각 섹션 별 심볼 수 만큼 반복
-					stringBuffer.append(tokenTable.symTab.symbolList.get(z)) // 버퍼에 입력
-							    .append("\t")
-							    .append(String.format("%02X", tokenTable.symTab.locationList.get(z)))
-								.append("\n");
+					stringBuilder.append(tokenTable.symTab.symbolList.get(z)) // 버퍼에 입력
+							     .append("\t")
+							     .append(String.format("%02X", tokenTable.symTab.locationList.get(z)))
+								 .append("\n");
 				}
 				
-				stringBuffer.append("\n");
+				stringBuilder.append("\n");
 			}
 			
-			bufferedOutputStream.write(stringBuffer.toString().getBytes()); // 출력 
+			bufferedOutputStream.write(stringBuilder.toString().getBytes()); // 출력 
 			bufferedOutputStream.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -204,20 +226,20 @@ public class Assembler {
 	private void printLiteralTable(String fileName) {
 		try {
 			BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fileName));
-			StringBuffer stringBuffer = new StringBuffer();
+			StringBuilder stringBuilder = new StringBuilder();
 			
 			for(int i = 0; i < TokenList.size(); i++) { // 섹션 수 만큼 반복
 				TokenTable tokenTable = TokenList.get(i); 
 				
 				for(int z = 0; z < tokenTable.literalTab.literalList.size(); z++) { // 각 섹션 별 리터럴 수 만큼 반복
-					stringBuffer.append(tokenTable.literalTab.literalList.get(z)) // 버퍼에 입력
-							    .append("\t")
-							    .append(String.format("%02X", tokenTable.literalTab.locationList.get(z)))
-								.append("\n");
+					stringBuilder.append(tokenTable.literalTab.literalList.get(z)) // 버퍼에 입력
+							     .append("\t")
+							     .append(String.format("%02X", tokenTable.literalTab.locationList.get(z)))
+								 .append("\n");
 				}
 			}
 			
-			bufferedOutputStream.write(stringBuffer.toString().getBytes()); // 출력 
+			bufferedOutputStream.write(stringBuilder.toString().getBytes()); // 출력 
 			bufferedOutputStream.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -234,8 +256,7 @@ public class Assembler {
 	 *   1) 분석된 내용을 바탕으로 object code를 생성하여 codeList에 저장.
 	 */
 	private void pass2() {
-		// TODO Auto-generated method stub
-		
+		System.err.println("pass 2 complete!");
 	}
 	
 	/**
@@ -243,8 +264,7 @@ public class Assembler {
 	 * @param fileName : 저장되는 파일 이름
 	 */
 	private void printObjectCode(String fileName) {
-		// TODO Auto-generated method stub
-		
+		System.out.println("print object program complete!");
 	}
 	
 }
