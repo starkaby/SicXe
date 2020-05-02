@@ -75,4 +75,26 @@ public class LiteralTable {
 		
 		return -1;
 	}
+	
+	
+	/**
+	 * 리터럴을 출력 형태로 반환한다.
+	 * 
+	 * @return
+	 */
+	public String print() {
+		String data = "";
+		
+		for(int i = 0; i < literalList.size(); i++) {
+			if(literalTypeList.get(i) == 'X') {
+				data = literalList.get(i);
+			} else if(literalTypeList.get(i) == 'C') {
+				for(int z = 0; z < literalList.get(i).length(); z++) {
+					data = data + String.format("%02X", (int)literalList.get(i).charAt(z));
+				}
+			}
+		}
+		
+		return data;
+	}
 }

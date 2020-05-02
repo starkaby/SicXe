@@ -10,8 +10,11 @@ public class Section {
 	public String programName;
 	
 	// 프로그램의 시작 주소
-	public String startAddress;
+	public int startAddress;
 	
 	// 프로그램의 전체 크기
-	public String programLength;
+	public int programLength;
+	
+	// 메인 여부
+	public boolean isMain;
 }

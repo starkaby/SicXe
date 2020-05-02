@@ -247,7 +247,6 @@ public class Assembler {
 			e.printStackTrace();
 		}
 		
-		
 		System.out.println("print literal table complete!");
 	}
 
@@ -256,6 +255,31 @@ public class Assembler {
 	 *   1) 분석된 내용을 바탕으로 object code를 생성하여 codeList에 저장.
 	 */
 	private void pass2() {
+		
+		// 패스 1 과정에서 사용하는 변수 초기화
+		TokenTable tokenTable = null;
+		SymbolTable symbolTable = null;
+		ExtTable extTable = null;
+		
+		// pass 2 수행
+		for(int sectionNumber = 0; sectionNumber < sectionList.size(); sectionNumber++) {
+			// 섹션 별 변수 초기화 
+			tokenTable = TokenList.get(sectionNumber);
+			extTable = extList.get(sectionNumber);
+			symbolTable = symtabList.get(sectionNumber);
+			
+			// 외부 정의 테이블을 검증한다.
+			extTable.validation(symbolTable);
+			
+			// 오브젝트 코드를 생성한다.
+			tokenTable.makeObjectCode();
+			
+			// 오브젝트 프로그램을 생성한다.
+			String objectProgram = tokenTable.makeObjectProgram();
+			
+			codeList.add(objectProgram);
+		}
+		
 		System.err.println("pass 2 complete!");
 	}
 	
@@ -264,6 +288,20 @@ public class Assembler {
 	 * @param fileName : 저장되는 파일 이름
 	 */
 	private void printObjectCode(String fileName) {
+		try {
+			BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(fileName));
+			StringBuilder stringBuilder = new StringBuilder();
+			
+			codeList.stream().forEach(stringBuilder::append);
+			
+			bufferedOutputStream.write(stringBuilder.toString().getBytes()); // 출력 
+			bufferedOutputStream.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
 		System.out.println("print object program complete!");
 	}
 	

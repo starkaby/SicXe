@@ -13,6 +13,8 @@ public class StringUtil {
 	
 	private static final String LITERAL_PATTERN_REGEXP = "^={1}[CX]{1}[']{1}[0-9a-zA-Z]*[']{1}$";
 	private static final String LITERAL_FIND_PATTERN_REGEXP = "'[0-9a-zA-Z]*'";
+	private static final String DATA_PATTERN_REGEXP = "^[CX]{1}[']{1}[0-9a-zA-Z]*[']{1}$";
+	private static final String DATA_FIND_PATTERN_REGEXP = "'[0-9a-zA-Z]*'";
 	private static int FIND_TOKEN_INDEX = 0;
 	private static int FIND_TOKEN_TYPE = -1; // 0 : END, 1 : TOKEN, 2 : OPERATOR
 
@@ -198,8 +200,104 @@ public class StringUtil {
 		}
 		
 		return arithmetic;
-	};
+	}
 	
+	/**
+	 * 어드레싱 모드를 반환한다.
+	 * 
+	 * @param str
+	 * @return
+	 */
+	public static int getAddressingMode(String str) {
+		if(str.startsWith("@")) { // 간접 참조
+			return 32;
+		} else if(str.startsWith("#")) { // 직접 참조
+			return 16;
+		}
+		
+		return 32+16;
+	}
+	
+	/**
+	 * 문자열을 받아 레지스터의 번호를 반환한다.
+	 * 
+	 * @param str
+	 * @return
+	 */
+	public static int getRegisterNumber(String str) {
+		if(StringUtil.isEmpty(str)) {
+			return 0;
+		}
+		
+		if(str.equals("A")) {
+			return 0;
+		} else if(str.equals("X")) {
+			return 1;
+		} else if(str.equals("L")) {
+			return 2;
+		} else if(str.equals("B")) {
+			return 3;
+		} else if(str.equals("S")) {
+			return 4;
+		} else if(str.equals("T")) {
+			return 5;
+		} else if(str.equals("F")) {
+			return 6;
+		} else if(str.equals("PC")) {
+			return 8;
+		} else if(str.equals("SW")) {
+			return 9;
+		}
+		
+		return 0;
+	}
+	
+	/**
+	 * 문자열이 특수 형식을 가진 문자열인지 확인한다.
+	 * 
+	 * @param str
+	 * @return
+	 */
+	public static boolean isForm(String str) {
+		if(StringUtil.isEmpty(str)) {
+			return false;
+		}
+		
+        return Pattern.matches(DATA_PATTERN_REGEXP, str);
+	}
+	
+	/**
+	 * 특수 형식 문자열에서 문자 부분만 추출한다.
+	 * 
+	 * @param str
+	 * @return
+	 */
+	public static String getFormDataToHex(String str) {
+		if(!StringUtil.isForm(str)) {
+			return null;
+		}
+		
+		Pattern pattern = Pattern.compile(DATA_FIND_PATTERN_REGEXP);
+		Matcher matcher = pattern.matcher(str);
+		
+		if(matcher.find()) {
+			String hexData = "";
+			String matchers = matcher.group();
+			matchers = matchers.replace("'", "");
+			
+			if(str.charAt(0) == 'X') {
+				hexData = matchers;
+			} else if(str.charAt(0) == 'C') {
+				for(int i = 0; i < matchers.length(); i++) {
+					hexData = hexData + String.format("%02X", str.charAt(i));
+				}
+			}
+			
+			return matchers;
+		}
+		
+		return null;
+	}
 	
 	/**
 	 * 문자열을 토큰 단위로 자르는 함수 

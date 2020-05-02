@@ -28,6 +28,7 @@ public class SymbolTable {
 	 * 매칭되는 주소값의 변경은 modifySymbol()을 통해서 이루어져야 한다.
 	 */
 	public void putSymbol(String symbol, int location) {
+		symbol = symbol.trim();
 		int symbolIndex = this.search(symbol); // 심볼 검색
 		
 		// 심볼이 존재 할 경우
@@ -46,6 +47,7 @@ public class SymbolTable {
 	 * @param newLocation : 새로 바꾸고자 하는 주소값
 	 */
 	public void modifySymbol(String symbol, int newLocation) {
+		symbol = symbol.trim();
 		int symbolIndex = this.search(symbol); // 심볼 검색
 		
 		// 심볼이 존재하지 않을 경우
